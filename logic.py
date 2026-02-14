@@ -22,23 +22,36 @@ def send_whatsapp_media(phone_number, media_type, link=None, media_id=None, capt
     final_phone = fix_phone_for_sandbox(phone_number)
 
     media_object = {}
-    if link:
-        media_object["link"] = link
-    elif media_id:
-        media_object["id"] = media_id
+    if link: media_object["link"] = link
+    elif media_id: media_object["id"] = media_id
     if caption: media_object["caption"] = caption
     if filename and media_type == "document": media_object["filename"] = filename
 
     data = {"messaging_product": "whatsapp", "to": final_phone, "type": media_type, media_type: media_object}
-    requests.post(url, headers=headers, json=data)
+    
+    # --- ИЗМЕНЕНИЕ ---
+    response = requests.post(url, headers=headers, json=data)
+    if response.status_code != 200:
+        print(f"❌ ОШИБКА МЕДИА: {response.status_code}")
+        print(f"📄 ДЕТАЛИ: {response.text}")
+    # -----------------
 
 
 def send_whatsapp_message(phone_number, message):
     url = f"https://graph.facebook.com/{config.VERSION}/{config.PHONE_NUMBER_ID}/messages"
     headers = {"Authorization": f"Bearer {config.ACCESS_TOKEN}", "Content-Type": "application/json"}
     final_phone = fix_phone_for_sandbox(phone_number)
+    
     data = {"messaging_product": "whatsapp", "to": final_phone, "type": "text", "text": {"body": message}}
-    requests.post(url, headers=headers, json=data)
+    
+    # --- ИЗМЕНЕНИЕ: ЧИТАЕМ ОТВЕТ META ---
+    response = requests.post(url, headers=headers, json=data)
+    if response.status_code != 200:
+        print(f"❌ ОШИБКА ОТПРАВКИ: {response.status_code}")
+        print(f"📄 ДЕТАЛИ: {response.text}")
+    else:
+        print(f"✅ Сообщение отправлено: {response.status_code}")
+    # ------------------------------------
 
 
 # ==========================================
@@ -209,5 +222,6 @@ def process_user_message(sender_id, text, message_type="text", media_id=None):
             time.sleep(2)
             send_whatsapp_media(sender_id, "document", link=messages.URL_GIFT_GUILD_2,
                                 caption="🎁 Ваш подарок", filename="Подарок для резидента Гильдии.pdf")
+
 
         user_states[sender_id] = "START"
