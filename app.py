@@ -3,6 +3,8 @@ from flask import Flask, request, jsonify
 import config
 import logic
 
+# Test commit: Проверка связи PyCharm -> GitHub -> Render
+
 app = Flask(__name__)
 
 # --- ГЛАВНАЯ СТРАНИЦА (ЧТОБЫ RENDER ВИДЕЛ, ЧТО МЫ ЖИВЫ) ---
