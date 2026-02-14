@@ -5,6 +5,10 @@ import logic
 
 app = Flask(__name__)
 
+@app.route("/", methods=["GET", "HEAD"])
+def home():
+    return "Bot is alive!", 200
+
 
 @app.route("/webhook", methods=["GET", "POST"])
 def webhook():
@@ -63,4 +67,5 @@ def webhook():
 
 
 if __name__ == "__main__":
+
     app.run(port=5000, debug=True)
