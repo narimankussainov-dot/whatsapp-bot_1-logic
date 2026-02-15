@@ -72,17 +72,17 @@ def webhook():
         return jsonify({"status": "success"}), 200
 
 
-# --- НОВЫЙ МАРШРУТ ДЛЯ TELEGRAM ---
 @app.route("/tg_webhook", methods=["POST"])
 def tg_webhook():
-    # Telegram шлет сюда уведомления, когда ты пишешь боту
     data = request.json
+    # --- ОТЛАДКА: СМОТРИМ, ЧТО ПРИШЛО ---
+    print(f"[DEBUG_TG] Прилетел JSON: {data}")
+    # ------------------------------------
 
-    # Передаем данные в логику
     if data:
         logic.process_telegram_update(data)
-
     return "OK", 200
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
