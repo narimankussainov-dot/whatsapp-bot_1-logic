@@ -55,43 +55,50 @@ def send_whatsapp_message(phone_number, message):
 
 
 # --- ФУНКЦИЯ ОТПРАВКИ В TELEGRAM ---
+# Обновленная функция отправки (с проверкой токена)
 def send_image_to_telegram(sender_id, media_id, caption_text):
+    print(f"[DEBUG] 🚀 Начинаем отправку в Telegram для {sender_id}")
+
+    # ПРОВЕРКА: Видит ли бот токен?
+    if not config.TG_BOT_TOKEN or not config.TG_ADMIN_ID:
+        print("[DEBUG] ❌ ОШИБКА: Нет токена Telegram или ID админа в конфиге!")
+        return
+
     try:
-        # 1. Получаем ссылку на фото от Meta
+        # 1. Получаем ссылку
         url_query = f"https://graph.facebook.com/{config.VERSION}/{media_id}"
         headers = {"Authorization": f"Bearer {config.ACCESS_TOKEN}"}
 
+        print(f"[DEBUG] 1. Запрашиваем URL фото у Meta: {media_id}")
         response_url = requests.get(url_query, headers=headers)
+
         if response_url.status_code != 200:
-            print(f"❌ Ошибка Meta URL: {response_url.text}")
+            print(f"[DEBUG] ❌ Ошибка получения URL от Meta: {response_url.text}")
             return
 
         image_url = response_url.json().get("url")
+        print(f"[DEBUG] 2. URL получен. Скачиваем байты...")
 
-        # 2. Скачиваем само фото
+        # 2. Скачиваем
         image_data = requests.get(image_url, headers=headers).content
+        print(f"[DEBUG] 3. Фото скачано ({len(image_data)} байт). Отправляем в TG...")
 
-        # 3. Отправляем в Telegram
+        # 3. Отправляем
         tg_url = f"https://api.telegram.org/bot{config.TG_BOT_TOKEN}/sendPhoto"
-
-        full_caption = (f"🧾 <b>НОВЫЙ ЧЕК</b>\n"
-                        f"👤 Клиент: +{sender_id}\n"
-                        f"ℹ️ Инфо: {caption_text}\n\n"
-                        f"👉 <i>Чтобы подтвердить, отправь клиенту в WhatsApp:</i>\n"
-                        f"<code>/approve {sender_id}</code>")
+        full_caption = f"Check from +{sender_id}\nInfo: {caption_text}"
 
         files = {'photo': image_data}
-        data = {'chat_id': config.TG_ADMIN_ID, 'caption': full_caption, 'parse_mode': 'HTML'}
+        data = {'chat_id': config.TG_ADMIN_ID, 'caption': full_caption}
 
         tg_response = requests.post(tg_url, files=files, data=data)
 
         if tg_response.status_code == 200:
-            print("✅ Чек переслан в Telegram!")
+            print("[DEBUG] ✅ УСПЕХ! Фото в Telegram.")
         else:
-            print(f"❌ Ошибка Telegram: {tg_response.text}")
+            print(f"[DEBUG] ❌ Ошибка от Telegram: {tg_response.text}")
 
     except Exception as e:
-        print(f"❌ Сбой пересылки: {e}")
+        print(f"[DEBUG] ❌ КРИТИЧЕСКАЯ ОШИБКА в функции Telegram: {e}")
 # -----------------------------------
 
 
@@ -236,33 +243,34 @@ def process_user_message(sender_id, text, message_type="text", media_id=None):
     #     else:
     #         send_whatsapp_message(sender_id, "Пожалуйста, отправьте чек (картинку или PDF).")
 
-        # --- ПРИЕМ ЧЕКА И ОТПРАВКА В TELEGRAM ---
-        elif current_state in ["WAITING_FOR_ALLIANCE_PAYMENT", "WAITING_FOR_GUILD_PAYMENT",
-                               "WAITING_ADMIN_ALLIANCE", "WAITING_ADMIN_GUILD"]:
 
-            if message_type in ["image", "document"]:
-                # 1. Говорим клиенту "Жди"
-                send_whatsapp_message(sender_id, messages.MSG_WAIT_FOR_ADMIN)
+    # --- ПРИЕМ ЧЕКА И ОТПРАВКА В TELEGRAM ---
+    elif current_state in ["WAITING_FOR_ALLIANCE_PAYMENT", "WAITING_FOR_GUILD_PAYMENT",
+                                   "WAITING_ADMIN_ALLIANCE", "WAITING_ADMIN_GUILD"]:
 
-                # 2. Определяем ветку (для админа)
-                is_alliance = "ALLIANCE" in current_state
-                branch_name = "👑 АЛЬЯНС (VIP)" if is_alliance else "🛡 ГИЛЬДИЯ"
+        print(f"[DEBUG] Мы внутри блока проверки оплаты. Тип сообщения: {message_type}")
 
-                # 3. ОТПРАВЛЯЕМ ФОТО АДМИНУ В TELEGRAM
-                if media_id:
-                    send_image_to_telegram(sender_id, media_id, f"Ветка: {branch_name}")
-                else:
-                    # Если вдруг пришел документ без media_id (редко, но бывает)
-                    print("Ошибка: Нет media_id для Telegram")
+        if message_type in ["image", "document"]:
+            print(f"[DEBUG] Это картинка или документ. Media ID: {media_id}")
 
-                # 4. Меняем статус клиента на "Ждем админа"
-                if is_alliance:
-                    user_states[sender_id] = "WAITING_ADMIN_ALLIANCE"
-                else:
-                    user_states[sender_id] = "WAITING_ADMIN_GUILD"
+            send_whatsapp_message(sender_id, messages.MSG_WAIT_FOR_ADMIN)
 
+            is_alliance = "ALLIANCE" in current_state
+            branch_name = "АЛЬЯНС" if is_alliance else "ГИЛЬДИЯ"
+
+            # ВЫЗЫВАЕМ ФУНКЦИЮ
+            if media_id:
+                send_image_to_telegram(sender_id, media_id, f"Ветка: {branch_name}")
             else:
-                send_whatsapp_message(sender_id, "Пожалуйста, отправьте чек (картинку или PDF).")
+                print("[DEBUG] ❌ ОШИБКА: Пришел документ, но нет media_id!")
+
+            if is_alliance:
+                user_states[sender_id] = "WAITING_ADMIN_ALLIANCE"
+            else:
+                user_states[sender_id] = "WAITING_ADMIN_GUILD"
+        else:
+            print(f"[DEBUG] Это НЕ картинка. Это: {text}")
+            send_whatsapp_message(sender_id, "Пожалуйста, отправьте чек (картинку или PDF).")
 
 
     # --- ФИНАЛ: СОГЛАСИЕ С ОФЕРТОЙ И ПОДАРКИ ---
