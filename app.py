@@ -1,7 +1,7 @@
 # app.py
 from flask import Flask, request, jsonify
 import config
-# import logic
+import logic # закомментирован для теста
 
 
 app = Flask(__name__)
@@ -59,11 +59,11 @@ def webhook():
 
                 if clean_sender == clean_admin:
                     print("👮‍♂️ Пишет АДМИНИСТРАТОР")
-                    # logic.process_admin_message(text) # закомментировали тут для теста
+                    logic.process_admin_message(text) # закомментирован тут для теста
                 else:
                     print("👤 Пишет КЛИЕНТ")
                     # строка ниже закомментирована для теста
-                    # logic.process_user_message(sender_id, text, message_type=msg_type, media_id=media_id)
+                    logic.process_user_message(sender_id, text, message_type=msg_type, media_id=media_id)
 
         except Exception as e:
             print(f"❌ Ошибка в app.py: {e}")
@@ -79,8 +79,8 @@ def tg_webhook():
     # ------------------------------------
 
 
-    # if data: # закомментирован для теста
-        # logic.process_telegram_update(data) # закомментирован для теста
+    if data: # закомментирован для теста
+        logic.process_telegram_update(data) # закомментирован для теста
     return "OK", 200
 
 
