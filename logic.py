@@ -5,7 +5,7 @@ import messages
 
 # ПАМЯТЬ
 user_states = {}
-last_check_sender = None
+last_check_sender = None  # Тут будем помнить, кто прислал чек последним
 
 
 # --- ФУНКЦИИ ОТПРАВКИ (С УНИВЕРСАЛЬНЫМ КОСТЫЛЕМ) ---
@@ -102,12 +102,11 @@ def send_image_to_telegram(sender_id, media_id, caption_text):
 # -----------------------------------
 
 
-# logic.py
-
 def process_telegram_update(data):
-    """Обработка команд от Админа из Telegram"""
+    # Разрешаем читать глобальную переменную
+    global last_check_sender
+
     try:
-        # Проверяем, что это сообщение
         if "message" not in data:
             return
 
@@ -115,33 +114,41 @@ def process_telegram_update(data):
         chat_id = message.get("chat", {}).get("id")
         text = message.get("text", "").strip()
 
-        # Защита: реагируем только на ТВОИ сообщения
-        # (преобразуем оба ID в строку для надежности сравнения)
+        # Проверка ID админа
         if str(chat_id) != str(config.TG_ADMIN_ID):
-            print(f"⚠️ Попытка доступа с чужого Telegram ID: {chat_id}")
+            print(f"⛔ Чужой ID: {chat_id}")
             return
 
-        # --- КОМАНДА ПОДТВЕРЖДЕНИЯ ---
-        # Формат: /approve 77012345678
-        if text.startswith("/approve") or text.startswith("+"):
-            parts = text.split()
-            if len(parts) < 2:
-                # Если админ забыл номер, шлем подсказку в ТГ (через requests, упрощенно)
+        client_phone = None
+
+        # --- ЛОГИКА ДЛЯ "+" или "Ok" ---
+        if text == "+" or text.lower() == "ok":
+            if last_check_sender:
+                client_phone = last_check_sender
+                print(f"[DEBUG] Работаем по 'плюсику' с клиентом: {client_phone}")
+            else:
+                print("[DEBUG] Память пуста. Нужна команда /approve НОМЕР")
+                # Можно добавить отправку сообщения в ТГ: requests.post(...)
                 return
 
-            client_phone = parts[1].replace("+", "")  # Убираем плюс, если есть
+        # --- ЛОГИКА ДЛЯ ПОЛНОЙ КОМАНДЫ ---
+        elif text.startswith("/approve"):
+            parts = text.split()
+            if len(parts) >= 2:
+                client_phone = parts[1].replace("+", "").strip()
+            else:
+                return
 
-            # ПРОВЕРЯЕМ, В КАКОЙ ВЕТКЕ КЛИЕНТ
+        # --- ЕСЛИ НОМЕР НАЙДЕН - ПОДТВЕРЖДАЕМ ---
+        if client_phone:
             current_state = user_states.get(client_phone)
 
             if not current_state:
-                print(f"❌ Клиент {client_phone} не найден в базе состояний.")
+                print(f"❌ Статус клиента {client_phone} не найден")
                 return
 
-            print(f"✅ Админ подтвердил оплату для {client_phone}. Ветка: {current_state}")
-
-            # 1. Ветка АЛЬЯНС
-            if "ALLIANCE" in current_state:
+            # Определяем ветку и шлем подарки
+            if "ALLIANCE" in str(current_state) or "АЛЬЯНС" in str(current_state):
                 send_whatsapp_message(client_phone, messages.MSG_ALLIANCE_CONGRATS)
                 send_whatsapp_media(client_phone, "document", link=messages.URL_GIFT_ALLIANCE_1,
                                     filename="Podarok_1.pdf")
@@ -149,18 +156,18 @@ def process_telegram_update(data):
                 send_whatsapp_media(client_phone, "document", link=messages.URL_GIFT_ALLIANCE_2,
                                     filename="Podarok_2.pdf")
 
-            # 2. Ветка ГИЛЬДИЯ
-            elif "GUILD" in current_state:
+            elif "GUILD" in str(current_state) or "ГИЛЬДИЯ" in str(current_state):
                 send_whatsapp_message(client_phone, messages.MSG_GUILD_CONGRATS)
                 send_whatsapp_media(client_phone, "document", link=messages.URL_GIFT_GUILD_1, filename="Podarok_1.pdf")
                 time.sleep(2)
                 send_whatsapp_media(client_phone, "document", link=messages.URL_GIFT_GUILD_2, filename="Podarok_2.pdf")
 
-            # Сбрасываем состояние или ставим "COMPLETED"
+            # Завершаем цикл
             user_states[client_phone] = "COMPLETED"
+            print(f"✅ Клиент {client_phone} успешно подтвержден!")
 
     except Exception as e:
-        print(f"❌ Ошибка в обработке Telegram: {e}")
+        print(f"❌ Ошибка в Telegram Logic: {e}")
 
 
 # ==========================================
@@ -313,6 +320,9 @@ def process_user_message(sender_id, text, message_type="text", media_id=None):
 
         if message_type in ["image", "document"]:
             print(f"[DEBUG] Это картинка или документ. Media ID: {media_id}")
+            global last_check_sender  # Разрешаем менять глобальную переменную
+            last_check_sender = sender_id  # Запоминаем этот номер
+            print(f"[DEBUG] Запомнили клиента для быстрой проверки: {last_check_sender}")
 
             send_whatsapp_message(sender_id, messages.MSG_WAIT_FOR_ADMIN)
 
