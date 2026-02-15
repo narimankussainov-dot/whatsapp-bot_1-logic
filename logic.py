@@ -102,6 +102,67 @@ def send_image_to_telegram(sender_id, media_id, caption_text):
 # -----------------------------------
 
 
+# logic.py
+
+def process_telegram_update(data):
+    """Обработка команд от Админа из Telegram"""
+    try:
+        # Проверяем, что это сообщение
+        if "message" not in data:
+            return
+
+        message = data["message"]
+        chat_id = message.get("chat", {}).get("id")
+        text = message.get("text", "").strip()
+
+        # Защита: реагируем только на ТВОИ сообщения
+        # (преобразуем оба ID в строку для надежности сравнения)
+        if str(chat_id) != str(config.TG_ADMIN_ID):
+            print(f"⚠️ Попытка доступа с чужого Telegram ID: {chat_id}")
+            return
+
+        # --- КОМАНДА ПОДТВЕРЖДЕНИЯ ---
+        # Формат: /approve 77012345678
+        if text.startswith("/approve") or text.startswith("+"):
+            parts = text.split()
+            if len(parts) < 2:
+                # Если админ забыл номер, шлем подсказку в ТГ (через requests, упрощенно)
+                return
+
+            client_phone = parts[1].replace("+", "")  # Убираем плюс, если есть
+
+            # ПРОВЕРЯЕМ, В КАКОЙ ВЕТКЕ КЛИЕНТ
+            current_state = user_states.get(client_phone)
+
+            if not current_state:
+                print(f"❌ Клиент {client_phone} не найден в базе состояний.")
+                return
+
+            print(f"✅ Админ подтвердил оплату для {client_phone}. Ветка: {current_state}")
+
+            # 1. Ветка АЛЬЯНС
+            if "ALLIANCE" in current_state:
+                send_whatsapp_message(client_phone, messages.MSG_ALLIANCE_CONGRATS)
+                send_whatsapp_media(client_phone, "document", link=messages.URL_GIFT_ALLIANCE_1,
+                                    filename="Podarok_1.pdf")
+                time.sleep(2)
+                send_whatsapp_media(client_phone, "document", link=messages.URL_GIFT_ALLIANCE_2,
+                                    filename="Podarok_2.pdf")
+
+            # 2. Ветка ГИЛЬДИЯ
+            elif "GUILD" in current_state:
+                send_whatsapp_message(client_phone, messages.MSG_GUILD_CONGRATS)
+                send_whatsapp_media(client_phone, "document", link=messages.URL_GIFT_GUILD_1, filename="Podarok_1.pdf")
+                time.sleep(2)
+                send_whatsapp_media(client_phone, "document", link=messages.URL_GIFT_GUILD_2, filename="Podarok_2.pdf")
+
+            # Сбрасываем состояние или ставим "COMPLETED"
+            user_states[client_phone] = "COMPLETED"
+
+    except Exception as e:
+        print(f"❌ Ошибка в обработке Telegram: {e}")
+
+
 # ==========================================
 # 👮‍♂️ ЛОГИКА АДМИНИСТРАТОРА
 # ==========================================
