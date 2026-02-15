@@ -1,10 +1,8 @@
 # app.py
 from flask import Flask, request, jsonify
 import config
-import logic
+# import logic
 
-# Test commit: Проверка связи PyCharm -> GitHub -> Render
-# Test commit #2: Проверка связи PyCharm -> GitHub -> Render
 
 app = Flask(__name__)
 
