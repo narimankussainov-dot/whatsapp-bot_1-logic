@@ -59,10 +59,11 @@ def webhook():
 
                 if clean_sender == clean_admin:
                     print("👮‍♂️ Пишет АДМИНИСТРАТОР")
-                    logic.process_admin_message(text)
+                    # logic.process_admin_message(text) # закомментировали тут для теста
                 else:
                     print("👤 Пишет КЛИЕНТ")
-                    logic.process_user_message(sender_id, text, message_type=msg_type, media_id=media_id)
+                    # строка ниже закомментирована для теста
+                    # logic.process_user_message(sender_id, text, message_type=msg_type, media_id=media_id)
 
         except Exception as e:
             print(f"❌ Ошибка в app.py: {e}")
@@ -77,8 +78,9 @@ def tg_webhook():
     print(f"[DEBUG_TG] Прилетел JSON: {data}")
     # ------------------------------------
 
-    if data:
-        logic.process_telegram_update(data)
+
+    # if data: # закомментирован для теста
+        # logic.process_telegram_update(data) # закомментирован для теста
     return "OK", 200
 
 
