@@ -85,10 +85,16 @@ def send_image_to_telegram(sender_id, media_id, caption_text):
 
         # 3. Отправляем
         tg_url = f"https://api.telegram.org/bot{config.TG_BOT_TOKEN}/sendPhoto"
-        full_caption = f"Check from +{sender_id}\nInfo: {caption_text}"
+        full_caption = (f"🧾 <b>ЧЕК НА ПРОВЕРКУ</b>\n"
+                        f"👤 Клиент: +{sender_id}\n"
+                        f"ℹ️ {caption_text}\n\n"
+                        f"<b>ЧТО ДЕЛАЕМ?</b>\n"
+                        f"✅ <b>Принять:</b> отправь <code>+</code>\n"
+                        f"⛔️ <b>Отказать:</b> отправь <code>-</code>\n"
+                        f"💬 <b>Отказать с причиной:</b> отправь <code>- Не видно сумму</code>")
 
         files = {'photo': image_data}
-        data = {'chat_id': config.TG_ADMIN_ID, 'caption': full_caption}
+        data = {'chat_id': config.TG_ADMIN_ID, 'caption': full_caption, 'parse_mode': 'HTML'}
 
         tg_response = requests.post(tg_url, files=files, data=data)
 
@@ -103,7 +109,6 @@ def send_image_to_telegram(sender_id, media_id, caption_text):
 
 
 def process_telegram_update(data):
-    # Разрешаем читать глобальную переменную
     global last_check_sender
 
     try:
@@ -120,34 +125,58 @@ def process_telegram_update(data):
             return
 
         client_phone = None
+        rejection_reason = None  # Переменная для причины отказа
 
-        # --- ЛОГИКА ДЛЯ "+" или "Ok" ---
+        # === ЛОГИКА КОМАНД ===
+
+        # 1. ПРИНЯТЬ (+)
         if text == "+" or text.lower() == "ok":
             if last_check_sender:
                 client_phone = last_check_sender
-                print(f"[DEBUG] Работаем по 'плюсику' с клиентом: {client_phone}")
             else:
-                print("[DEBUG] Память пуста. Нужна команда /approve НОМЕР")
-                # Можно добавить отправку сообщения в ТГ: requests.post(...)
+                requests.post(f"https://api.telegram.org/bot{config.TG_BOT_TOKEN}/sendMessage",
+                              json={"chat_id": chat_id,
+                                    "text": "⚠️ Я забыл номер последнего клиента. Используй: /approve НОМЕР"})
                 return
 
-        # --- ЛОГИКА ДЛЯ ПОЛНОЙ КОМАНДЫ ---
+        # 2. ОТКЛОНИТЬ (-)
+        elif text.startswith("-"):
+            if last_check_sender:
+                client_phone = last_check_sender
+                # Отрезаем минус и берем текст после него
+                reason = text[1:].strip()
+                if not reason:
+                    reason = "Оплата не найдена или сумма некорректна."
+                rejection_reason = reason
+            else:
+                requests.post(f"https://api.telegram.org/bot{config.TG_BOT_TOKEN}/sendMessage",
+                              json={"chat_id": chat_id,
+                                    "text": "⚠️ Я забыл номер. Используй WhatsApp для ответа вручную."})
+                return
+
+        # 3. РУЧНОЙ ВВОД (/approve)
         elif text.startswith("/approve"):
             parts = text.split()
             if len(parts) >= 2:
                 client_phone = parts[1].replace("+", "").strip()
-            else:
-                return
 
-        # --- ЕСЛИ НОМЕР НАЙДЕН - ПОДТВЕРЖДАЕМ ---
+        # === ВЫПОЛНЕНИЕ ДЕЙСТВИЙ ===
+
         if client_phone:
+            # Если это ОТКАЗ
+            if rejection_reason:
+                print(f"[LOGIC] Отказ клиенту {client_phone}. Причина: {rejection_reason}")
+                msg_text = f"✋ *Оплата не подтверждена.*\n\nПричина: _{rejection_reason}_\n\nПожалуйста, проверьте чек и отправьте его снова."
+                send_whatsapp_message(client_phone, msg_text)
+
+                # Сообщаем Админу в ТГ, что все ок
+                requests.post(f"https://api.telegram.org/bot{config.TG_BOT_TOKEN}/sendMessage",
+                              json={"chat_id": chat_id, "text": f"🛑 Отказ отправлен клиенту +{client_phone}"})
+                return  # Выходим, статус менять не надо (пусть клиент шлет новый чек)
+
+            # Если это ОДОБРЕНИЕ (код доходит сюда, только если rejection_reason == None)
             current_state = user_states.get(client_phone)
 
-            if not current_state:
-                print(f"❌ Статус клиента {client_phone} не найден")
-                return
-
-            # Определяем ветку и шлем подарки
             if "ALLIANCE" in str(current_state) or "АЛЬЯНС" in str(current_state):
                 send_whatsapp_message(client_phone, messages.MSG_ALLIANCE_CONGRATS)
                 send_whatsapp_media(client_phone, "document", link=messages.URL_GIFT_ALLIANCE_1,
@@ -162,9 +191,11 @@ def process_telegram_update(data):
                 time.sleep(2)
                 send_whatsapp_media(client_phone, "document", link=messages.URL_GIFT_GUILD_2, filename="Podarok_2.pdf")
 
-            # Завершаем цикл
             user_states[client_phone] = "COMPLETED"
-            print(f"✅ Клиент {client_phone} успешно подтвержден!")
+
+            # Подтверждение Админу
+            requests.post(f"https://api.telegram.org/bot{config.TG_BOT_TOKEN}/sendMessage",
+                          json={"chat_id": chat_id, "text": f"✅ Подарки отправлены клиенту +{client_phone}!"})
 
     except Exception as e:
         print(f"❌ Ошибка в Telegram Logic: {e}")
