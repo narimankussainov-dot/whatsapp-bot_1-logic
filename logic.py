@@ -54,6 +54,47 @@ def send_whatsapp_message(phone_number, message):
     # ------------------------------------
 
 
+# --- ФУНКЦИЯ ОТПРАВКИ В TELEGRAM ---
+def send_image_to_telegram(sender_id, media_id, caption_text):
+    try:
+        # 1. Получаем ссылку на фото от Meta
+        url_query = f"https://graph.facebook.com/{config.VERSION}/{media_id}"
+        headers = {"Authorization": f"Bearer {config.ACCESS_TOKEN}"}
+
+        response_url = requests.get(url_query, headers=headers)
+        if response_url.status_code != 200:
+            print(f"❌ Ошибка Meta URL: {response_url.text}")
+            return
+
+        image_url = response_url.json().get("url")
+
+        # 2. Скачиваем само фото
+        image_data = requests.get(image_url, headers=headers).content
+
+        # 3. Отправляем в Telegram
+        tg_url = f"https://api.telegram.org/bot{config.TG_BOT_TOKEN}/sendPhoto"
+
+        full_caption = (f"🧾 <b>НОВЫЙ ЧЕК</b>\n"
+                        f"👤 Клиент: +{sender_id}\n"
+                        f"ℹ️ Инфо: {caption_text}\n\n"
+                        f"👉 <i>Чтобы подтвердить, отправь клиенту в WhatsApp:</i>\n"
+                        f"<code>/approve {sender_id}</code>")
+
+        files = {'photo': image_data}
+        data = {'chat_id': config.TG_ADMIN_ID, 'caption': full_caption, 'parse_mode': 'HTML'}
+
+        tg_response = requests.post(tg_url, files=files, data=data)
+
+        if tg_response.status_code == 200:
+            print("✅ Чек переслан в Telegram!")
+        else:
+            print(f"❌ Ошибка Telegram: {tg_response.text}")
+
+    except Exception as e:
+        print(f"❌ Сбой пересылки: {e}")
+# -----------------------------------
+
+
 # ==========================================
 # 👮‍♂️ ЛОГИКА АДМИНИСТРАТОРА
 # ==========================================
@@ -167,32 +208,62 @@ def process_user_message(sender_id, text, message_type="text", media_id=None):
             send_whatsapp_message(sender_id, messages.MSG_REFUSAL_LINK)
             user_states[sender_id] = "START"
 
+    # --- СТАРЫЙ БЛОК КОДА ДЛЯ ПРОВЕРКИ ЧЕРЕЗ WHATSAPP
     # --- ПРИЕМ ЧЕКА И ОТПРАВКА АДМИНУ ---
-    elif current_state in ["WAITING_FOR_ALLIANCE_PAYMENT", "WAITING_FOR_GUILD_PAYMENT", "WAITING_ADMIN_ALLIANCE",
-                           "WAITING_ADMIN_GUILD"]:
+    # elif current_state in ["WAITING_FOR_ALLIANCE_PAYMENT", "WAITING_FOR_GUILD_PAYMENT", "WAITING_ADMIN_ALLIANCE",
+    #                        "WAITING_ADMIN_GUILD"]:
+    #
+    #     if message_type in ["image", "document"]:
+    #         send_whatsapp_message(sender_id, messages.MSG_WAIT_FOR_ADMIN)
+    #
+    #         # Определяем, откуда пришел клиент
+    #         is_alliance = "ALLIANCE" in current_state
+    #
+    #         branch_name = "АЛЬЯНС (VIP)" if is_alliance else "ГИЛЬДИЯ"
+    #         send_whatsapp_message(config.ADMIN_PHONE,
+    #                               f"🛎 ПРОВЕРКА ОПЛАТЫ!\nВетка: {branch_name}\nКлиент: {sender_id}\n\nНапишите '+', чтобы принять.")
+    #
+    #         if media_id:
+    #             send_whatsapp_media(config.ADMIN_PHONE, message_type, media_id=media_id, caption="Чек клиента")
+    #
+    #         last_check_sender = sender_id
+    #
+    #         # Фиксируем статус ожидания админа (раздельный!)
+    #         if is_alliance:
+    #             user_states[sender_id] = "WAITING_ADMIN_ALLIANCE"
+    #         else:
+    #             user_states[sender_id] = "WAITING_ADMIN_GUILD"
+    #     else:
+    #         send_whatsapp_message(sender_id, "Пожалуйста, отправьте чек (картинку или PDF).")
 
-        if message_type in ["image", "document"]:
-            send_whatsapp_message(sender_id, messages.MSG_WAIT_FOR_ADMIN)
+        # --- ПРИЕМ ЧЕКА И ОТПРАВКА В TELEGRAM ---
+        elif current_state in ["WAITING_FOR_ALLIANCE_PAYMENT", "WAITING_FOR_GUILD_PAYMENT",
+                               "WAITING_ADMIN_ALLIANCE", "WAITING_ADMIN_GUILD"]:
 
-            # Определяем, откуда пришел клиент
-            is_alliance = "ALLIANCE" in current_state
+            if message_type in ["image", "document"]:
+                # 1. Говорим клиенту "Жди"
+                send_whatsapp_message(sender_id, messages.MSG_WAIT_FOR_ADMIN)
 
-            branch_name = "АЛЬЯНС (VIP)" if is_alliance else "ГИЛЬДИЯ"
-            send_whatsapp_message(config.ADMIN_PHONE,
-                                  f"🛎 ПРОВЕРКА ОПЛАТЫ!\nВетка: {branch_name}\nКлиент: {sender_id}\n\nНапишите '+', чтобы принять.")
+                # 2. Определяем ветку (для админа)
+                is_alliance = "ALLIANCE" in current_state
+                branch_name = "👑 АЛЬЯНС (VIP)" if is_alliance else "🛡 ГИЛЬДИЯ"
 
-            if media_id:
-                send_whatsapp_media(config.ADMIN_PHONE, message_type, media_id=media_id, caption="Чек клиента")
+                # 3. ОТПРАВЛЯЕМ ФОТО АДМИНУ В TELEGRAM
+                if media_id:
+                    send_image_to_telegram(sender_id, media_id, f"Ветка: {branch_name}")
+                else:
+                    # Если вдруг пришел документ без media_id (редко, но бывает)
+                    print("Ошибка: Нет media_id для Telegram")
 
-            last_check_sender = sender_id
+                # 4. Меняем статус клиента на "Ждем админа"
+                if is_alliance:
+                    user_states[sender_id] = "WAITING_ADMIN_ALLIANCE"
+                else:
+                    user_states[sender_id] = "WAITING_ADMIN_GUILD"
 
-            # Фиксируем статус ожидания админа (раздельный!)
-            if is_alliance:
-                user_states[sender_id] = "WAITING_ADMIN_ALLIANCE"
             else:
-                user_states[sender_id] = "WAITING_ADMIN_GUILD"
-        else:
-            send_whatsapp_message(sender_id, "Пожалуйста, отправьте чек (картинку или PDF).")
+                send_whatsapp_message(sender_id, "Пожалуйста, отправьте чек (картинку или PDF).")
+
 
     # --- ФИНАЛ: СОГЛАСИЕ С ОФЕРТОЙ И ПОДАРКИ ---
     elif current_state in ["WAITING_OFFERTA_ALLIANCE", "WAITING_OFFERTA_GUILD"]:
