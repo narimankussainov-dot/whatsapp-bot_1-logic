@@ -9,17 +9,18 @@ last_check_sender = None  # Тут будем помнить, кто присл�
 
 
 # --- ФУНКЦИИ ОТПРАВКИ (С УНИВЕРСАЛЬНЫМ КОСТЫЛЕМ) ---
-def fix_phone_for_sandbox(phone_number):
-    clean_phone = str(phone_number).replace("+", "").strip()
-    if clean_phone.startswith("77") and len(clean_phone) == 11:
-        return "787" + clean_phone[2:]
-    return clean_phone
+# def fix_phone_for_sandbox(phone_number):
+#     clean_phone = str(phone_number).replace("+", "").strip()
+#     if clean_phone.startswith("77") and len(clean_phone) == 11:
+#         return "787" + clean_phone[2:]
+#     return clean_phone
 
 
 def send_whatsapp_media(phone_number, media_type, link=None, media_id=None, caption=None, filename=None):
     url = f"https://graph.facebook.com/{config.VERSION}/{config.PHONE_NUMBER_ID}/messages"
     headers = {"Authorization": f"Bearer {config.ACCESS_TOKEN}", "Content-Type": "application/json"}
-    final_phone = fix_phone_for_sandbox(phone_number)
+    # final_phone = fix_phone_for_sandbox(phone_number) # ЗАМЕНИ ЗДЕСЬ
+    final_phone = str(phone_number).replace("+", "").strip()
 
     media_object = {}
     if link: media_object["link"] = link
@@ -40,7 +41,8 @@ def send_whatsapp_media(phone_number, media_type, link=None, media_id=None, capt
 def send_whatsapp_message(phone_number, message):
     url = f"https://graph.facebook.com/{config.VERSION}/{config.PHONE_NUMBER_ID}/messages"
     headers = {"Authorization": f"Bearer {config.ACCESS_TOKEN}", "Content-Type": "application/json"}
-    final_phone = fix_phone_for_sandbox(phone_number)
+    # final_phone = fix_phone_for_sandbox(phone_number) # ЗАМЕНИ ЗДЕСЬ
+    final_phone = str(phone_number).replace("+", "").strip()
     
     data = {"messaging_product": "whatsapp", "to": final_phone, "type": "text", "text": {"body": message}}
     
