@@ -180,16 +180,18 @@ def process_telegram_update(data):
             if "ALLIANCE" in str(current_state) or "АЛЬЯНС" in str(current_state):
                 send_whatsapp_message(client_phone, messages.MSG_ALLIANCE_CONGRATS)
                 send_whatsapp_media(client_phone, "document", link=messages.URL_GIFT_ALLIANCE_1,
-                                    filename="Podarok_1.pdf")
+                                    caption="🎁 Ваш подарок", filename="Альянс резидентіне арналған сыйлық.pdf")
                 time.sleep(2)
                 send_whatsapp_media(client_phone, "document", link=messages.URL_GIFT_ALLIANCE_2,
-                                    filename="Podarok_2.pdf")
+                                    caption="🎁 Ваш подарок", filename="Подарок для резидента Альянс")
 
             elif "GUILD" in str(current_state) or "ГИЛЬДИЯ" in str(current_state):
                 send_whatsapp_message(client_phone, messages.MSG_GUILD_CONGRATS)
-                send_whatsapp_media(client_phone, "document", link=messages.URL_GIFT_GUILD_1, filename="Podarok_1.pdf")
+                send_whatsapp_media(client_phone, "document", link=messages.URL_GIFT_GUILD_1,
+                                    caption="🎁 Ваш подарок", filename="Гильдия резидентіне арналған сыйлық.pdf")
                 time.sleep(2)
-                send_whatsapp_media(client_phone, "document", link=messages.URL_GIFT_GUILD_2, filename="Podarok_2.pdf")
+                send_whatsapp_media(client_phone, "document", link=messages.URL_GIFT_GUILD_2,
+                                    caption="🎁 Ваш подарок", filename="Подарок для резидента Гильдии.pdf")
 
             user_states[client_phone] = "COMPLETED"
 
