@@ -127,7 +127,7 @@ def process_telegram_update(data):
             return
 
         client_phone = None
-        rejection_reason = None  # Переменная для причины отказа
+        rejection_reason = None
 
         # === ЛОГИКА КОМАНД ===
 
@@ -145,7 +145,6 @@ def process_telegram_update(data):
         elif text.startswith("-"):
             if last_check_sender:
                 client_phone = last_check_sender
-                # Отрезаем минус и берем текст после него
                 reason = text[1:].strip()
                 if not reason:
                     reason = "Оплата не найдена или сумма некорректна."
@@ -171,35 +170,37 @@ def process_telegram_update(data):
                 msg_text = f"✋ *Оплата не подтверждена.*\n\nПричина: _{rejection_reason}_\n\nПожалуйста, проверьте чек и отправьте его снова."
                 send_whatsapp_message(client_phone, msg_text)
 
-                # Сообщаем Админу в ТГ, что все ок
                 requests.post(f"https://api.telegram.org/bot{config.TG_BOT_TOKEN}/sendMessage",
                               json={"chat_id": chat_id, "text": f"🛑 Отказ отправлен клиенту +{client_phone}"})
-                return  # Выходим, статус менять не надо (пусть клиент шлет новый чек)
+                return
 
-            # Если это ОДОБРЕНИЕ (код доходит сюда, только если rejection_reason == None)
+                # Если это ОДОБРЕНИЕ (Админ нажал +)
             current_state = user_states.get(client_phone)
 
-            if "ALLIANCE" in str(current_state) or "АЛЬЯНС" in str(current_state):
-                send_whatsapp_message(client_phone, messages.MSG_ALLIANCE_CONGRATS)
-                send_whatsapp_media(client_phone, "document", link=messages.URL_GIFT_ALLIANCE_1,
-                                    caption="🎁 Ваш подарок", filename="Альянс резидентіне арналған сыйлық.pdf")
-                time.sleep(2)
-                send_whatsapp_media(client_phone, "document", link=messages.URL_GIFT_ALLIANCE_2,
-                                    caption="🎁 Ваш подарок", filename="Подарок для резидента Альянс")
+            # --- ИЗМЕНЕНИЕ: ОТПРАВЛЯЕМ ОФЕРТУ ВМЕСТО ПОДАРКОВ ---
 
-            elif "GUILD" in str(current_state) or "ГИЛЬДИЯ" in str(current_state):
-                send_whatsapp_message(client_phone, messages.MSG_GUILD_CONGRATS)
-                send_whatsapp_media(client_phone, "document", link=messages.URL_GIFT_GUILD_1,
-                                    caption="🎁 Ваш подарок", filename="Гильдия резидентіне арналған сыйлық.pdf")
-                time.sleep(2)
-                send_whatsapp_media(client_phone, "document", link=messages.URL_GIFT_GUILD_2,
-                                    caption="🎁 Ваш подарок", filename="Подарок для резидента Гильдии.pdf")
+            print(f"[LOGIC] Оплата подтверждена. Отправляем оферту клиенту {client_phone}")
 
-            user_states[client_phone] = "COMPLETED"
+            # 1. Отправляем PDF Оферты
+            send_whatsapp_media(client_phone, "document", link=messages.URL_PDF_OFFERTA,
+                                caption=None, filename=messages.NAME_PDF_OFFERTA)
+
+            # 2. Отправляем текст "Согласны?"
+            time.sleep(1)
+            send_whatsapp_message(client_phone, messages.MSG_OFFERTA_TEXT)
+
+            # 3. Меняем статус (чтобы ждать ответ клиента)
+            is_alliance = "ALLIANCE" in str(current_state) or "АЛЬЯНС" in str(current_state)
+
+            if is_alliance:
+                user_states[client_phone] = "WAITING_OFFERTA_ALLIANCE"
+            else:
+                user_states[client_phone] = "WAITING_OFFERTA_GUILD"
 
             # Подтверждение Админу
             requests.post(f"https://api.telegram.org/bot{config.TG_BOT_TOKEN}/sendMessage",
-                          json={"chat_id": chat_id, "text": f"✅ Подарки отправлены клиенту +{client_phone}!"})
+                          json={"chat_id": chat_id,
+                                "text": f"✅ Оплата подтверждена! Клиенту +{client_phone} отправлена оферта."})
 
     except Exception as e:
         print(f"❌ Ошибка в Telegram Logic: {e}")
