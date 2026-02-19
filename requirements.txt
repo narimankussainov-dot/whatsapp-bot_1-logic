@@ -1,3 +1,5 @@
 flask
 requests
 gunicorn
+gspread==6.0.0
+google-auth==2.28.0
