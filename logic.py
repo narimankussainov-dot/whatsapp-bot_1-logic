@@ -2,6 +2,7 @@ import requests
 import time
 import config
 import messages
+import sheets
 
 # ПАМЯТЬ
 user_states = {}
@@ -174,8 +175,30 @@ def process_telegram_update(data):
                               json={"chat_id": chat_id, "text": f"🛑 Отказ отправлен клиенту +{client_phone}"})
                 return
 
-                # Если это ОДОБРЕНИЕ (Админ нажал +)
+            # Если это ОДОБРЕНИЕ (Админ нажал +)
             current_state = user_states.get(client_phone)
+
+            # --- НОВАЯ ВЕТКА: ДОП. ПРОДАЖИ (ЗАПИСЬ В ГУГЛ) ---
+            if "UPSELL" in str(current_state):
+                print(f"[LOGIC] Оплата ДОП. ПРОДАЖИ подтверждена. Клиент {client_phone}")
+
+                # 1. Отправляем финальную ссылку клиенту
+                send_whatsapp_message(client_phone, messages.MSG_UPSELL_SUCCESS)
+
+                # 2. Записываем в Google Таблицу!
+                try:
+                    sheets.add_payment_record(client_phone, service_name="Вебинар (Доп)", status="Оплачено")
+                except Exception as e:
+                    print(f"❌ Ошибка записи в таблицу: {e}")
+
+                # 3. Сбрасываем статус
+                user_states[client_phone] = "START"
+
+                # 4. Отчет админу
+                requests.post(f"https://api.telegram.org/bot{config.TG_BOT_TOKEN}/sendMessage",
+                              json={"chat_id": chat_id,
+                                    "text": f"✅ Оплата подтверждена! Клиенту +{client_phone} отправлена ссылка. Данные занесены в таблицу Google!"})
+                return  # Выходим, дальше идти не нужно
 
             # --- ИЗМЕНЕНИЕ: ОТПРАВЛЯЕМ ОФЕРТУ ВМЕСТО ПОДАРКОВ ---
 
@@ -257,6 +280,15 @@ def process_user_message(sender_id, text, message_type="text", media_id=None):
         user_states[sender_id] = "START"
         send_whatsapp_message(sender_id, "🔄 Сброс.")
         return
+
+
+    # --- НОВЫЙ БЛОК: ЛОВЕЦ СЛОВА "НУЖНО" ---
+    if text_lower == "нужно":
+        send_whatsapp_message(sender_id, messages.MSG_UPSELL_PAYMENT)
+        user_states[sender_id] = "WAITING_UPSELL_PAYMENT"
+        return
+    # ----------------------------------------
+
 
     current_state = user_states.get(sender_id, "START")
     print(f"User: {sender_id} | State: {current_state}")
@@ -350,7 +382,8 @@ def process_user_message(sender_id, text, message_type="text", media_id=None):
 
     # --- ПРИЕМ ЧЕКА И ОТПРАВКА В TELEGRAM ---
     elif current_state in ["WAITING_FOR_ALLIANCE_PAYMENT", "WAITING_FOR_GUILD_PAYMENT",
-                                   "WAITING_ADMIN_ALLIANCE", "WAITING_ADMIN_GUILD"]:
+                           "WAITING_ADMIN_ALLIANCE", "WAITING_ADMIN_GUILD",
+                           "WAITING_UPSELL_PAYMENT", "WAITING_ADMIN_UPSELL"]:
 
         print(f"[DEBUG] Мы внутри блока проверки оплаты. Тип сообщения: {message_type}")
 
@@ -363,18 +396,30 @@ def process_user_message(sender_id, text, message_type="text", media_id=None):
             send_whatsapp_message(sender_id, messages.MSG_WAIT_FOR_ADMIN)
 
             is_alliance = "ALLIANCE" in current_state
-            branch_name = "АЛЬЯНС" if is_alliance else "ГИЛЬДИЯ"
+            is_upsell = "UPSELL" in current_state
+            # branch_name = "АЛЬЯНС" if is_alliance else "ГИЛЬДИЯ"
 
-            # ВЫЗЫВАЕМ ФУНКЦИЮ
+            if is_alliance:
+                branch_name = "АЛЬЯНС"
+            elif is_upsell:
+                branch_name = "ДОП. ПРОДАЖА"
+            else:
+                branch_name = "ГИЛЬДИЯ"
+
+            # ВЫЗЫВАЕМ ФУНКЦИЮ отправки в ТГ
             if media_id:
                 send_image_to_telegram(sender_id, media_id, f"Ветка: {branch_name}")
             else:
                 print("[DEBUG] ❌ ОШИБКА: Пришел документ, но нет media_id!")
 
+            # Меняем статус ожидания
             if is_alliance:
                 user_states[sender_id] = "WAITING_ADMIN_ALLIANCE"
+            elif is_upsell:
+                user_states[sender_id] = "WAITING_ADMIN_UPSELL"
             else:
                 user_states[sender_id] = "WAITING_ADMIN_GUILD"
+
         else:
             print(f"[DEBUG] Это НЕ картинка. Это: {text}")
             send_whatsapp_message(sender_id, "Пожалуйста, отправьте чек (картинку или PDF).")
