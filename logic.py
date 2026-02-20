@@ -297,8 +297,6 @@ def process_user_message(sender_id, text, message_type="text", media_id=None):
     if current_state == "START":
         send_whatsapp_message(sender_id, messages.MSG_WELCOME)
         time.sleep(1)  # Короткая пауза для текста
-        # Если нужно отправить Оферту в начале, раскомментируй:
-        # send_whatsapp_media(sender_id, "document", link=messages.URL_PDF_OFFERTA, caption=messages.MSG_OFFERTA_TEXT, filename="Ofert.pdf")
 
         time.sleep(1)
         send_whatsapp_message(sender_id, messages.MSG_INSTRUCT)
@@ -350,34 +348,6 @@ def process_user_message(sender_id, text, message_type="text", media_id=None):
         elif any(w in text_lower for w in ["нет", "жоқ"]):
             send_whatsapp_message(sender_id, messages.MSG_REFUSAL_LINK)
             user_states[sender_id] = "START"
-
-    # --- СТАРЫЙ БЛОК КОДА ДЛЯ ПРОВЕРКИ ЧЕРЕЗ WHATSAPP
-    # --- ПРИЕМ ЧЕКА И ОТПРАВКА АДМИНУ ---
-    # elif current_state in ["WAITING_FOR_ALLIANCE_PAYMENT", "WAITING_FOR_GUILD_PAYMENT", "WAITING_ADMIN_ALLIANCE",
-    #                        "WAITING_ADMIN_GUILD"]:
-    #
-    #     if message_type in ["image", "document"]:
-    #         send_whatsapp_message(sender_id, messages.MSG_WAIT_FOR_ADMIN)
-    #
-    #         # Определяем, откуда пришел клиент
-    #         is_alliance = "ALLIANCE" in current_state
-    #
-    #         branch_name = "АЛЬЯНС (VIP)" if is_alliance else "ГИЛЬДИЯ"
-    #         send_whatsapp_message(config.ADMIN_PHONE,
-    #                               f"🛎 ПРОВЕРКА ОПЛАТЫ!\nВетка: {branch_name}\nКлиент: {sender_id}\n\nНапишите '+', чтобы принять.")
-    #
-    #         if media_id:
-    #             send_whatsapp_media(config.ADMIN_PHONE, message_type, media_id=media_id, caption="Чек клиента")
-    #
-    #         last_check_sender = sender_id
-    #
-    #         # Фиксируем статус ожидания админа (раздельный!)
-    #         if is_alliance:
-    #             user_states[sender_id] = "WAITING_ADMIN_ALLIANCE"
-    #         else:
-    #             user_states[sender_id] = "WAITING_ADMIN_GUILD"
-    #     else:
-    #         send_whatsapp_message(sender_id, "Пожалуйста, отправьте чек (картинку или PDF).")
 
 
     # --- ПРИЕМ ЧЕКА И ОТПРАВКА В TELEGRAM ---
