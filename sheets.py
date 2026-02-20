@@ -2,7 +2,7 @@ import os
 import json
 import gspread
 from google.oauth2.service_account import Credentials
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # URL твоей таблицы (ВСТАВЬ СВОЮ ССЫЛКУ СЮДА)
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1LDVw4oWi_8vBYR08FVqoM9YBexA98DTLHO2-BzS1WGk/edit?pli=1&gid=0#gid=0"
@@ -40,12 +40,15 @@ def add_payment_record(phone_number, service_name="Доп. услуга", status
     """Добавляет новую строку в таблицу"""
     sheet = get_google_sheet()
     if sheet:
-        # Получаем текущее время
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # 1. Берем время сервера (UTC) и добавляем 5 часов (Казахстан)
+        kz_time = datetime.now() + timedelta(hours=5)
+
+        # 2. Меняем формат на привычный: День.Месяц.Год Часы:Минуты:Секунды
+        formatted_time = kz_time.strftime("%d.%m.%Y %H:%M:%S")
 
         # Данные должны идти в том же порядке, что и твои столбцы:
         # Дата | Телефон | Услуга | Статус
-        row_data = [now, f"+{phone_number}", service_name, status]
+        row_data = [formatted_time, f"+{phone_number}", service_name, status]
 
         # Добавляем строку в конец таблицы
         sheet.append_row(row_data)
