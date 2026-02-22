@@ -352,7 +352,7 @@ def process_user_message(sender_id, text, message_type="text", media_id=None):
     if current_state == "INTEREST_START":
         if any(w in text_lower for w in ["да", "ия", "иә"]):
             send_whatsapp_buttons(sender_id, messages.MSG_INT_CHOICE,
-                                  ["Онлайн практикум", "Образец документа", "Сессия"])
+                                  ["📚Онлайн практикум", "📄Образец документа", "🎯Сессия"])
             user_states[sender_id] = "INTEREST_CHOICE"
         else:
             send_whatsapp_message(sender_id, messages.MSG_INT_REJECT)
