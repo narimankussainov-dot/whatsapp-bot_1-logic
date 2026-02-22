@@ -43,6 +43,14 @@ def webhook():
                 # ОПРЕДЕЛЯЕМ ТИП
                 if msg_type == "text":
                     text = message_data['text']['body']
+
+                # 2. НОВЫЙ БЛОК: Если это нажатие кнопки
+                elif msg_type == "interactive":
+                    interactive_type = message_data["interactive"].get("type")
+                    if interactive_type == "button_reply":
+                        # Вытаскиваем текст с нажатой кнопки
+                        text = message_data["interactive"]["button_reply"]["title"]
+
                 elif msg_type == "image":
                     text = "ЧЕК"
                     media_id = message_data['image']['id']
