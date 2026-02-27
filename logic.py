@@ -475,54 +475,54 @@ def process_user_message(sender_id, text, message_type="text", media_id=None):
 
 
         # --- ПРИЕМ ЧЕКА И ОТПРАВКА В TELEGRAM ---
-        elif current_state in ["WAITING_FOR_ALLIANCE_PAYMENT", "WAITING_FOR_GUILD_PAYMENT",
-                               "WAITING_ADMIN_ALLIANCE", "WAITING_ADMIN_GUILD",
-                               "WAITING_UPSELL_PAYMENT", "WAITING_ADMIN_UPSELL",
-                               "WAITING_PRACTICUM_PAYMENT", "WAITING_ADMIN_PRACTICUM"]:
+    elif current_state in ["WAITING_FOR_ALLIANCE_PAYMENT", "WAITING_FOR_GUILD_PAYMENT",
+                           "WAITING_ADMIN_ALLIANCE", "WAITING_ADMIN_GUILD",
+                           "WAITING_UPSELL_PAYMENT", "WAITING_ADMIN_UPSELL",
+                           "WAITING_PRACTICUM_PAYMENT", "WAITING_ADMIN_PRACTICUM"]:
 
-            print(f"[DEBUG] Мы внутри блока проверки оплаты. Тип сообщения: {message_type}")
+        print(f"[DEBUG] Мы внутри блока проверки оплаты. Тип сообщения: {message_type}")
 
-            if message_type in ["image", "document"]:
-                print(f"[DEBUG] Это картинка или документ. Media ID: {media_id}")
-                global last_check_sender
-                last_check_sender = sender_id
-                print(f"[DEBUG] Запомнили клиента для быстрой проверки: {last_check_sender}")
+        if message_type in ["image", "document"]:
+            print(f"[DEBUG] Это картинка или документ. Media ID: {media_id}")
+            global last_check_sender
+            last_check_sender = sender_id
+            print(f"[DEBUG] Запомнили клиента для быстрой проверки: {last_check_sender}")
 
-                send_whatsapp_message(sender_id,
-                                      messages.MSG_A4_WAIT if "PRACTICUM" in current_state else messages.MSG_WAIT_FOR_ADMIN)
+            send_whatsapp_message(sender_id,
+                                  messages.MSG_A4_WAIT if "PRACTICUM" in current_state else messages.MSG_WAIT_FOR_ADMIN)
 
-                is_alliance = "ALLIANCE" in current_state
-                is_upsell = "UPSELL" in current_state
-                is_practicum = "PRACTICUM" in current_state
+            is_alliance = "ALLIANCE" in current_state
+            is_upsell = "UPSELL" in current_state
+            is_practicum = "PRACTICUM" in current_state
 
-                if is_alliance:
-                    branch_name = "АЛЬЯНС"
-                elif is_upsell:
-                    branch_name = "ДОП. ПРОДАЖА"
-                elif is_practicum:
-                    branch_name = "ПРАКТИКУМ"
-                else:
-                    branch_name = "ГИЛЬДИЯ"
-
-                # ВЫЗЫВАЕМ ФУНКЦИЮ отправки в ТГ
-                if media_id:
-                    send_image_to_telegram(sender_id, media_id, f"Ветка: {branch_name}")
-                else:
-                    print("[DEBUG] ❌ ОШИБКА: Пришел документ, но нет media_id!")
-
-                # Меняем статус ожидания
-                if is_alliance:
-                    user_states[sender_id] = "WAITING_ADMIN_ALLIANCE"
-                elif is_upsell:
-                    user_states[sender_id] = "WAITING_ADMIN_UPSELL"
-                elif is_practicum:
-                    user_states[sender_id] = "WAITING_ADMIN_PRACTICUM"
-                else:
-                    user_states[sender_id] = "WAITING_ADMIN_GUILD"
-
+            if is_alliance:
+                branch_name = "АЛЬЯНС"
+            elif is_upsell:
+                branch_name = "ДОП. ПРОДАЖА"
+            elif is_practicum:
+                branch_name = "ПРАКТИКУМ"
             else:
-                print(f"[DEBUG] Это НЕ картинка. Это: {text}")
-                send_whatsapp_message(sender_id, "Пожалуйста, отправьте чек (картинку или PDF).")
+                branch_name = "ГИЛЬДИЯ"
+
+            # ВЫЗЫВАЕМ ФУНКЦИЮ отправки в ТГ
+            if media_id:
+                send_image_to_telegram(sender_id, media_id, f"Ветка: {branch_name}")
+            else:
+                print("[DEBUG] ❌ ОШИБКА: Пришел документ, но нет media_id!")
+
+            # Меняем статус ожидания
+            if is_alliance:
+                user_states[sender_id] = "WAITING_ADMIN_ALLIANCE"
+            elif is_upsell:
+                user_states[sender_id] = "WAITING_ADMIN_UPSELL"
+            elif is_practicum:
+                user_states[sender_id] = "WAITING_ADMIN_PRACTICUM"
+            else:
+                user_states[sender_id] = "WAITING_ADMIN_GUILD"
+
+        else:
+            print(f"[DEBUG] Это НЕ картинка. Это: {text}")
+            send_whatsapp_message(sender_id, "Пожалуйста, отправьте чек (картинку или PDF).")
 
 
     # --- ФИНАЛ: СОГЛАСИЕ С ОФЕРТОЙ И ПОДАРКИ ---
