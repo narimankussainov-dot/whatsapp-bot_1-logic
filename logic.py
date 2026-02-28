@@ -48,7 +48,11 @@ def send_whatsapp_message(phone_number, message):
     data = {"messaging_product": "whatsapp", "to": final_phone, "type": "text", "text": {"body": message}}
     
     # --- ИЗМЕНЕНИЕ: ЧИТАЕМ ОТВЕТ META ---
+    # response = requests.post(url, headers=headers, json=data)
+    t0 = time.time()
     response = requests.post(url, headers=headers, json=data)
+    print("🌐 WhatsApp API TIME:", time.time() - t0)
+
     if response.status_code != 200:
         print(f"❌ ОШИБКА ОТПРАВКИ: {response.status_code}")
         print(f"📄 ДЕТАЛИ: {response.text}")
@@ -322,6 +326,8 @@ def process_admin_message(text):
 # 👤 ЛОГИКА ПОЛЬЗОВАТЕЛЯ
 # ==========================================
 def process_user_message(sender_id, text, message_type="text", media_id=None):
+    start_logic = time.time()
+    print("🧠 LOGIC START")
     global last_check_sender
     text_lower = text.strip().lower()
 
@@ -556,3 +562,6 @@ def process_user_message(sender_id, text, message_type="text", media_id=None):
 
 
         user_states[sender_id] = "START"
+
+        print("🧠 LOGIC END")
+        print("⏱ LOGIC TIME:", time.time() - start_logic)

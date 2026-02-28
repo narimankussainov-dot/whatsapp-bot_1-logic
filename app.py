@@ -3,6 +3,7 @@ from flask import Flask, request, jsonify
 import config
 import logic # закомментирован для теста
 import os
+import time
 
 
 app = Flask(__name__)
@@ -15,6 +16,9 @@ def home():
 # --- WEBHOOK (СЮДА СТУЧИТ META) ---
 @app.route("/webhook", methods=["GET", "POST"])
 def webhook():
+    start_time = time.time()
+    print("🟢 WEBHOOK START")
+
     # 1. VERIFY (ПРОВЕРКА ТОКЕНА)
     if request.method == "GET":
         mode = request.args.get("hub.mode")
@@ -76,6 +80,9 @@ def webhook():
 
         except Exception as e:
             print(f"❌ Ошибка в app.py: {e}")
+
+        print("🟢 WEBHOOK END")
+        print("⏱ WEBHOOK TIME:", time.time() - start_time)
 
         return jsonify({"status": "success"}), 200
 
