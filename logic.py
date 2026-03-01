@@ -383,8 +383,10 @@ def process_user_message(sender_id, text, message_type="text", media_id=None):
 
     elif current_state == "A_WAIT_DECISION":
         if "да" in text_lower or "занимаю" in text_lower:
-            send_whatsapp_message(sender_id, messages.MSG_A4_PAY)
-            user_states[sender_id] = "WAITING_PRACTICUM_PAYMENT"
+            # send_whatsapp_message(sender_id, messages.MSG_A4_PAY)
+            send_whatsapp_message(sender_id, messages.MSG_A4_NEW)
+            # user_states[sender_id] = "WAITING_PRACTICUM_PAYMENT"
+            user_states[sender_id] = "START"
         else:
             send_whatsapp_message(sender_id, messages.MSG_INT_REJECT)
             user_states[sender_id] = "START"
