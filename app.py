@@ -4,11 +4,33 @@ import config
 import logic # закомментирован для теста
 import os
 import time
+import signal
+
+
+print("🚀 APP FILE IMPORTED")
+print("PORT =", os.getenv("PORT"))
+print("TIME =", time.time())
+
+
+def shutdown_handler(signum, frame):
+    print(f"💀 RECEIVED SIGNAL {signum}")
+
+signal.signal(signal.SIGTERM, shutdown_handler)
+signal.signal(signal.SIGINT, shutdown_handler)
 
 
 app = Flask(__name__)
+print("✅ Flask app CREATED")
+
+@app.before_request
+def log_request():
+    print(f"➡️ REQUEST: {request.method} {request.path}")
 
 # --- ГЛАВНАЯ СТРАНИЦА (ЧТОБЫ RENDER ВИДЕЛ, ЧТО МЫ ЖИВЫ) ---
+@app.route("/")
+def health():
+    print("💓 HEALTH CHECK")
+    return "OK", 200
 @app.route("/", methods=["GET", "HEAD"])
 def home():
     return "Bot is alive!", 200
