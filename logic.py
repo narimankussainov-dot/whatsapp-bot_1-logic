@@ -410,15 +410,28 @@ def process_user_message(sender_id, text, message_type="text", media_id=None):
     # --- ВЕТКА С: СЕССИЯ ---
     elif current_state == "C_WAIT_URGENCY":
         send_whatsapp_buttons(sender_id, messages.MSG_C2, ["✅ Да, готов(а)!", "🤔 Не уверен(а)"])
-        user_states[sender_id] = "C_WAIT_READY"
 
-    elif current_state == "C_WAIT_READY":
+        # Разделяем логику в зависимости от того, что ответил клиент
+        if "нет" in text_lower or "не срочно" in text_lower:
+            user_states[sender_id] = "C_WAIT_READY_NOT_URGENT"
+        else:
+            user_states[sender_id] = "C_WAIT_READY_URGENT"
+
+    # Сценарий 1: Клиенту было СРОЧНО
+    elif current_state == "C_WAIT_READY_URGENT":
         if "да" in text_lower or "готов" in text_lower:
             send_whatsapp_message(sender_id, messages.MSG_C3_YES)
         else:
             send_whatsapp_message(sender_id, messages.MSG_C3_NO)
         user_states[sender_id] = "START"
-    # ----------------------------------------------------------------
+
+    # Сценарий 2: Клиенту было НЕ СРОЧНО (Новая логика заказчика)
+    elif current_state == "C_WAIT_READY_NOT_URGENT":
+        # Если было "не срочно", то даже при ответе "готов" отправляем MSG_C3_NO
+        # (Если ответит "не уверен" - тоже MSG_C3_NO)
+        send_whatsapp_message(sender_id, messages.MSG_C3_NO)
+        user_states[sender_id] = "START"
+        # ----------------------------------------------------------------
 
 
 
