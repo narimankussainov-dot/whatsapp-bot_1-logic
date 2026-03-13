@@ -233,7 +233,7 @@ def process_telegram_update(data):
                                     "text": "⚠️ Я забыл номер. Используй WhatsApp для ответа вручную."})
                 return
 
-        # 3. РУЧНОЙ ВВОД (/approve) 
+        # 3. РУЧНОЙ ВВОД (/approve)
         elif text.startswith("/approve"):
             parts = text.split()
             if len(parts) >= 2:
@@ -371,6 +371,12 @@ def process_user_message(sender_id, text, message_type="text", media_id=None):
     start_logic = time.time()
     print("🧠 LOGIC START")
     global last_check_sender
+
+    # --- НОВОЕ: ЗАПИСЫВАЕМ ОТВЕТ В ПРЕДЫДУЩИЙ ШАГ ---
+    if text:
+        threading.Thread(target=sheets.add_answer_to_last_step, args=(sender_id, text.strip())).start()
+    # ------------------------------------------------
+
     text_lower = text.strip().lower()
 
     current_state = user_states.get(sender_id, "START")

@@ -41,3 +41,26 @@ def update_client_progress(phone_number, branch, step_description):
 
     except Exception as e:
         print(f"❌ Ошибка записи в таблицу: {e}")
+
+
+def add_answer_to_last_step(phone_number, user_answer):
+    """Находит самую последнюю запись клиента и добавляет его ответ в колонку E"""
+    sheet = get_google_sheet()
+    if not sheet: return
+
+    phone_str = f"+{phone_number}".replace("++", "+")
+
+    try:
+        # Ищем все строки, где упоминается этот номер
+        cells = sheet.findall(phone_str, in_column=2)
+
+        if cells:
+            # Берем САМУЮ ПОСЛЕДНЮЮ ячейку из найденных (это и есть текущий шаг клиента)
+            last_cell = cells[-1]
+
+            # Записываем ответ клиента в 5-ю колонку (E) этой же строки
+            sheet.update_cell(last_cell.row, 5, user_answer)
+            print(f"✍️ Ответ клиента записан: {phone_str} -> {user_answer}")
+
+    except Exception as e:
+        print(f"❌ Ошибка записи ответа в таблицу: {e}")
