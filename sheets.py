@@ -1,7 +1,6 @@
 import os
 import json
 import gspread
-from gspread.exceptions import CellNotFound  # <-- Добавили обработку ошибок поиска
 from google.oauth2.service_account import Credentials
 from datetime import datetime, timedelta
 
@@ -36,18 +35,19 @@ def update_client_progress(phone_number, branch, step_description):
     phone_str = f"+{phone_number}".replace("++", "+")
 
     try:
-        try:
-            # Ищем клиента во втором столбце (Колонка B)
-            cell = sheet.find(phone_str, in_column=2)
+        # Безопасный поиск: findall не вызывает ошибку, если ничего не найдено, а возвращает []
+        cells = sheet.findall(phone_str, in_column=2)
 
-            # Если нашли — обновляем ячейки в этой строке
+        if cells:
+            # Если нашли (список не пустой) — берем первую найденную ячейку и обновляем её строку
+            cell = cells[0]
             sheet.update_cell(cell.row, 1, formatted_time)  # Дата и Время
             sheet.update_cell(cell.row, 3, branch)  # Ветка
             sheet.update_cell(cell.row, 4, step_description)  # Шаг
             print(f"🔄 CRM Обновлен: {phone_str} -> {step_description}")
 
-        except CellNotFound:
-            # Если не нашли (новый клиент) — добавляем новую строку
+        else:
+            # Если не нашли (список пустой) — добавляем новую строку
             sheet.append_row([formatted_time, phone_str, branch, step_description])
             print(f"✅ CRM Новый клиент: {phone_str} -> {step_description}")
 
