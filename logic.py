@@ -233,7 +233,7 @@ def process_telegram_update(data):
                                     "text": "⚠️ Я забыл номер. Используй WhatsApp для ответа вручную."})
                 return
 
-        # 3. РУЧНОЙ ВВОД (/approve)
+        # 3. РУЧНОЙ ВВОД (/approve) 
         elif text.startswith("/approve"):
             parts = text.split()
             if len(parts) >= 2:
