@@ -3,10 +3,54 @@ import time
 import config
 import messages
 import sheets
+import threading
 
 # ПАМЯТЬ
 user_states = {}
 last_check_sender = None  # Тут будем помнить, кто прислал чек последним
+
+# --- КАРТА ШАГОВ ДЛЯ CRM ---
+CRM_STEPS = {
+    "START": ("Ожидание", "Диалог завершен / Сброс"),
+    "INTEREST_START": ("Воронка: Интересно", "Нажал ИНТЕРЕСНО (Согласие)"),
+    "INTEREST_CHOICE": ("Воронка: Интересно", "Выбирает продукт"),
+
+    "A_WAIT_REASON": ("Практикум", "Выбирает причину интереса (1-4)"),
+    "A_WAIT_DECISION": ("Практикум", "Предложено занять место (Да/Нет)"),
+    "WAITING_PRACTICUM_PAYMENT": ("Практикум", "Ждет оплаты (Выдан счет)"),
+    "WAITING_ADMIN_PRACTICUM": ("Практикум", "Чек отправлен, ждет админа"),
+
+    "B_WAIT_STAT": ("Документ", "Отвечает на статистику 80/20"),
+    "B_WAIT_RESIDENT": ("Документ", "Вопрос: Резидент или нет?"),
+
+    "C_WAIT_URGENCY": ("Сессия", "Вопрос: Срочно или нет?"),
+    "C_WAIT_READY_URGENT": ("Сессия", "Готов работать? (Срочно)"),
+    "C_WAIT_READY_NOT_URGENT": ("Сессия", "Готов работать? (Не срочно)"),
+
+    "WAITING_FOR_FORM": ("Анкета", "Ждем заполнения анкеты (ГОТОВО)"),
+    "WAITING_FOR_STAFF_ANSWER": ("Опрос", "Вопрос: Есть ли сотрудники?"),
+
+    "WAITING_FOR_ALLIANCE_DECISION": ("Альянс", "Изучает оффер Альянса"),
+    "WAITING_FOR_GUILD_DECISION": ("Гильдия", "Изучает оффер Гильдии"),
+    "WAITING_FOR_ALLIANCE_PAYMENT": ("Альянс", "Ждет оплаты (Выставлен счет)"),
+    "WAITING_FOR_GUILD_PAYMENT": ("Гильдия", "Ждет оплаты (Выставлен счет)"),
+
+    "WAITING_ADMIN_ALLIANCE": ("Альянс", "Чек на проверке у админа"),
+    "WAITING_ADMIN_GUILD": ("Гильдия", "Чек на проверке у админа"),
+
+    "WAITING_OFFERTA_ALLIANCE": ("Альянс", "Выслана оферта (Ждет согласия)"),
+    "WAITING_OFFERTA_GUILD": ("Гильдия", "Выслана оферта (Ждет согласия)"),
+}
+
+
+def set_user_state(phone, new_state):
+    """Меняет статус в памяти бота и асинхронно обновляет Google Таблицу"""
+    user_states[phone] = new_state  # Меняем в памяти
+
+    # Запускаем обновление таблицы в фоновом потоке (чтобы бот не тормозил)
+    if new_state in CRM_STEPS:
+        branch, step = CRM_STEPS[new_state]
+        threading.Thread(target=sheets.update_client_progress, args=(phone, branch, step)).start()
 
 
 # --- ФУНКЦИИ ОТПРАВКИ (С УНИВЕРСАЛЬНЫМ КОСТЫЛЕМ) ---
@@ -20,7 +64,6 @@ last_check_sender = None  # Тут будем помнить, кто присл�
 def send_whatsapp_media(phone_number, media_type, link=None, media_id=None, caption=None, filename=None):
     url = f"https://graph.facebook.com/{config.VERSION}/{config.PHONE_NUMBER_ID}/messages"
     headers = {"Authorization": f"Bearer {config.ACCESS_TOKEN}", "Content-Type": "application/json"}
-    # final_phone = fix_phone_for_sandbox(phone_number) # ЗАМЕНИ ЗДЕСЬ
     final_phone = str(phone_number).replace("+", "").strip()
 
     media_object = {}
@@ -42,7 +85,6 @@ def send_whatsapp_media(phone_number, media_type, link=None, media_id=None, capt
 def send_whatsapp_message(phone_number, message):
     url = f"https://graph.facebook.com/{config.VERSION}/{config.PHONE_NUMBER_ID}/messages"
     headers = {"Authorization": f"Bearer {config.ACCESS_TOKEN}", "Content-Type": "application/json"}
-    # final_phone = fix_phone_for_sandbox(phone_number) # ЗАМЕНИ ЗДЕСЬ
     final_phone = str(phone_number).replace("+", "").strip()
     
     data = {"messaging_product": "whatsapp", "to": final_phone, "type": "text", "text": {"body": message}}
@@ -220,13 +262,11 @@ def process_telegram_update(data):
                 # 1. Отправляем финальную ссылку клиенту
                 send_whatsapp_message(client_phone, messages.MSG_UPSELL_SUCCESS)
 
-                # 2. Записываем в Google Таблицу!
-                try:
-                    sheets.add_payment_record(client_phone, service_name="Вебинар (Доп)", status="Оплачено")
-                except Exception as e:
-                    print(f"❌ Ошибка записи в таблицу: {e}")
+                # 2. Обновляем статус в CRM на УСПЕХ
+                threading.Thread(target=sheets.update_client_progress,
+                                 args=(client_phone, "ДОП. ПРОДАЖА", "✅ ОПЛАТА ПОДТВЕРЖДЕНА")).start()
 
-                # 3. Сбрасываем статус
+                # 3. Тихо сбрасываем память бота, чтобы не перебить красивый статус в таблице
                 user_states[client_phone] = "START"
 
                 # 4. Отчет админу
@@ -242,9 +282,11 @@ def process_telegram_update(data):
                 # Отправляем сообщение об успехе
                 send_whatsapp_message(client_phone, messages.MSG_A_SUCCESS)
 
-                # Опционально: можно тут тоже записывать в Google Таблицу
-                # sheets.add_payment_record(client_phone, service_name="Практикум", status="Оплачено")
+                # Обновляем статус в CRM на УСПЕХ
+                threading.Thread(target=sheets.update_client_progress,
+                                 args=(client_phone, "ПРАКТИКУМ", "✅ ОПЛАТА ПОДТВЕРЖДЕНА")).start()
 
+                # Тихо сбрасываем память бота
                 user_states[client_phone] = "START"
 
                 requests.post(f"https://api.telegram.org/bot{config.TG_BOT_TOKEN}/sendMessage",
@@ -308,9 +350,9 @@ def process_admin_message(text):
 
         # РАЗВИЛКА: Ставим правильный статус ожидания ответа на оферту
         if client_state == "WAITING_ADMIN_ALLIANCE":
-            user_states[last_check_sender] = "WAITING_OFFERTA_ALLIANCE"
+            set_user_state(last_check_sender, "WAITING_OFFERTA_ALLIANCE")
         elif client_state == "WAITING_ADMIN_GUILD":
-            user_states[last_check_sender] = "WAITING_OFFERTA_GUILD"
+            set_user_state(last_check_sender, "WAITING_OFFERTA_GUILD")
 
         last_check_sender = None
 
@@ -335,7 +377,7 @@ def process_user_message(sender_id, text, message_type="text", media_id=None):
     print(f"User: {sender_id} | State: {current_state}")
 
     if text_lower == "/reset":
-        user_states[sender_id] = "START"
+        set_user_state(sender_id, "START")
         send_whatsapp_message(sender_id, "🔄 Сброс.")
         return
 
@@ -343,7 +385,7 @@ def process_user_message(sender_id, text, message_type="text", media_id=None):
     # --- НОВЫЙ БЛОК: ЛОВЕЦ СЛОВА "НУЖНО" ---
     if text_lower == "нужно":
         send_whatsapp_message(sender_id, messages.MSG_UPSELL_PAYMENT)
-        user_states[sender_id] = "WAITING_UPSELL_PAYMENT"
+        set_user_state(sender_id, "WAITING_UPSELL_PAYMENT")
         return
     # ----------------------------------------
 
@@ -351,7 +393,7 @@ def process_user_message(sender_id, text, message_type="text", media_id=None):
     if text_lower == "интересно":
         send_whatsapp_message(sender_id, messages.MSG_INT_1)
         send_whatsapp_buttons(sender_id, messages.MSG_INT_2, ["✅ Ия Да", "❌ Жоқ Нет"])
-        user_states[sender_id] = "INTEREST_START"
+        set_user_state(sender_id, "INTEREST_START")
         return
 
     # Обработка ответа Да/Нет
@@ -359,37 +401,37 @@ def process_user_message(sender_id, text, message_type="text", media_id=None):
         if any(w in text_lower for w in ["да", "ия", "иә"]):
             send_whatsapp_buttons(sender_id, messages.MSG_INT_CHOICE,
                                   ["📚Онлайн практикум", "📄Образец документа", "🎯Сессия"])
-            user_states[sender_id] = "INTEREST_CHOICE"
+            set_user_state(sender_id, "INTEREST_CHOICE")
         else:
             send_whatsapp_message(sender_id, messages.MSG_INT_REJECT)
-            user_states[sender_id] = "START"
+            set_user_state(sender_id, "START")
 
     # Выбор направления
     elif current_state == "INTEREST_CHOICE":
         if "практикум" in text_lower:
             send_whatsapp_message(sender_id, messages.MSG_A1)
-            user_states[sender_id] = "A_WAIT_REASON"
+            set_user_state(sender_id, "A_WAIT_REASON")
         elif "документ" in text_lower:
             send_whatsapp_buttons(sender_id, messages.MSG_B1, ["Я из 20%", "Скорее из 80%"])
-            user_states[sender_id] = "B_WAIT_STAT"
+            set_user_state(sender_id, "B_WAIT_STAT")
         elif "сесси" in text_lower:
             send_whatsapp_buttons(sender_id, messages.MSG_C1, ["🔴 Да, срочно", "🟡 Нет, не срочно"])
-            user_states[sender_id] = "C_WAIT_URGENCY"
+            set_user_state(sender_id, "C_WAIT_URGENCY")
 
     # --- ВЕТКА А: ПРАКТИКУМ ---
     elif current_state == "A_WAIT_REASON":
         send_whatsapp_buttons(sender_id, messages.MSG_A2_A3, ["🔥 Да, занимаю!", "❌ Нет"])
-        user_states[sender_id] = "A_WAIT_DECISION"
+        set_user_state(sender_id, "A_WAIT_DECISION")
 
     elif current_state == "A_WAIT_DECISION":
         if "да" in text_lower or "занимаю" in text_lower:
             # send_whatsapp_message(sender_id, messages.MSG_A4_PAY)
             send_whatsapp_message(sender_id, messages.MSG_A4_NEW)
             # user_states[sender_id] = "WAITING_PRACTICUM_PAYMENT"
-            user_states[sender_id] = "START"
+            set_user_state(sender_id, "START")
         else:
             send_whatsapp_message(sender_id, messages.MSG_INT_REJECT)
-            user_states[sender_id] = "START"
+            set_user_state(sender_id, "START")
 
     # --- ВЕТКА Б: ДОКУМЕНТ ---
     elif current_state == "B_WAIT_STAT":
@@ -400,14 +442,14 @@ def process_user_message(sender_id, text, message_type="text", media_id=None):
 
         time.sleep(2)
         send_whatsapp_buttons(sender_id, messages.MSG_B2, ["⭐ Да, резидент", "👤 Не резидент"])
-        user_states[sender_id] = "B_WAIT_RESIDENT"
+        set_user_state(sender_id, "B_WAIT_RESIDENT")
 
     elif current_state == "B_WAIT_RESIDENT":
         if "да" in text_lower:
             send_whatsapp_message(sender_id, messages.MSG_B3_LINK_YES)
         else:
             send_whatsapp_message(sender_id, messages.MSG_B3_LINK_NO)
-        user_states[sender_id] = "START"
+        set_user_state(sender_id, "START")
 
     # --- ВЕТКА С: СЕССИЯ ---
     elif current_state == "C_WAIT_URGENCY":
@@ -415,9 +457,9 @@ def process_user_message(sender_id, text, message_type="text", media_id=None):
 
         # Разделяем логику в зависимости от того, что ответил клиент
         if "нет" in text_lower or "не срочно" in text_lower:
-            user_states[sender_id] = "C_WAIT_READY_NOT_URGENT"
+            set_user_state(sender_id, "C_WAIT_READY_NOT_URGENT")
         else:
-            user_states[sender_id] = "C_WAIT_READY_URGENT"
+            set_user_state(sender_id, "C_WAIT_READY_URGENT")
 
     # Сценарий 1: Клиенту было СРОЧНО
     elif current_state == "C_WAIT_READY_URGENT":
@@ -425,14 +467,14 @@ def process_user_message(sender_id, text, message_type="text", media_id=None):
             send_whatsapp_message(sender_id, messages.MSG_C3_YES)
         else:
             send_whatsapp_message(sender_id, messages.MSG_C3_NO)
-        user_states[sender_id] = "START"
+        set_user_state(sender_id, "START")
 
     # Сценарий 2: Клиенту было НЕ СРОЧНО (Новая логика заказчика)
     elif current_state == "C_WAIT_READY_NOT_URGENT":
         # Если было "не срочно", то даже при ответе "готов" отправляем MSG_C3_NO
         # (Если ответит "не уверен" - тоже MSG_C3_NO)
         send_whatsapp_message(sender_id, messages.MSG_C3_NO)
-        user_states[sender_id] = "START"
+        set_user_state(sender_id, "START")
         # ----------------------------------------------------------------
 
 
@@ -445,13 +487,13 @@ def process_user_message(sender_id, text, message_type="text", media_id=None):
 
         time.sleep(1)
         send_whatsapp_message(sender_id, messages.MSG_INSTRUCT)
-        user_states[sender_id] = "WAITING_FOR_FORM"
+        set_user_state(sender_id, "WAITING_FOR_FORM")
 
     elif current_state == "WAITING_FOR_FORM":
         if any(w in text_lower for w in ["готово", "done", "+"]):
             send_whatsapp_message(sender_id, messages.MSG_AINASH_1)
             send_whatsapp_message(sender_id, messages.MSG_AINASH_2)
-            user_states[sender_id] = "WAITING_FOR_STAFF_ANSWER"
+            set_user_state(sender_id, "WAITING_FOR_STAFF_ANSWER")
         else:
             send_whatsapp_message(sender_id, "Напишите 'ГОТОВО'.")
 
@@ -464,7 +506,7 @@ def process_user_message(sender_id, text, message_type="text", media_id=None):
             send_whatsapp_media(sender_id, "image", link=messages.URL_IMG_ALLIANCE_2, caption=messages.MSG_ALLIANCE_INTRO)
             time.sleep(4)
             send_whatsapp_message(sender_id, messages.MSG_ALLIANCE_OFFER)
-            user_states[sender_id] = "WAITING_FOR_ALLIANCE_DECISION"
+            set_user_state(sender_id, "WAITING_FOR_ALLIANCE_DECISION")
 
         elif any(w in text_lower for w in ["нет", "жоқ"]):
             # Ветка ГИЛЬДИЯ
@@ -473,7 +515,7 @@ def process_user_message(sender_id, text, message_type="text", media_id=None):
             send_whatsapp_media(sender_id, "image", link=messages.URL_IMG_GUILD_2, caption=messages.MSG_GUILD_INTRO)
             time.sleep(4)  # Ждем картинки
             send_whatsapp_message(sender_id, messages.MSG_GUILD_OFFER)
-            user_states[sender_id] = "WAITING_FOR_GUILD_DECISION"
+            set_user_state(sender_id, "WAITING_FOR_GUILD_DECISION")
         else:
             send_whatsapp_message(sender_id, "ДА или НЕТ?")
 
@@ -481,18 +523,18 @@ def process_user_message(sender_id, text, message_type="text", media_id=None):
     elif current_state == "WAITING_FOR_ALLIANCE_DECISION":
         if any(w in text_lower for w in ["да", "иә"]):
             send_whatsapp_message(sender_id, messages.MSG_ALLIANCE_PAYMENT)
-            user_states[sender_id] = "WAITING_FOR_ALLIANCE_PAYMENT"
+            set_user_state(sender_id, "WAITING_FOR_ALLIANCE_PAYMENT")
         elif any(w in text_lower for w in ["нет", "жоқ"]):
             send_whatsapp_message(sender_id, messages.MSG_REFUSAL_LINK)
-            user_states[sender_id] = "START"
+            set_user_state(sender_id, "START")
 
     elif current_state == "WAITING_FOR_GUILD_DECISION":
         if any(w in text_lower for w in ["да", "иә"]):
             send_whatsapp_message(sender_id, messages.MSG_GUILD_PAYMENT)
-            user_states[sender_id] = "WAITING_FOR_GUILD_PAYMENT"
+            set_user_state(sender_id, "WAITING_FOR_GUILD_PAYMENT")
         elif any(w in text_lower for w in ["нет", "жоқ"]):
             send_whatsapp_message(sender_id, messages.MSG_REFUSAL_LINK)
-            user_states[sender_id] = "START"
+            set_user_state(sender_id, "START")
 
 
         # --- ПРИЕМ ЧЕКА И ОТПРАВКА В TELEGRAM ---
@@ -533,13 +575,13 @@ def process_user_message(sender_id, text, message_type="text", media_id=None):
 
             # Меняем статус ожидания
             if is_alliance:
-                user_states[sender_id] = "WAITING_ADMIN_ALLIANCE"
+                set_user_state(sender_id, "WAITING_ADMIN_ALLIANCE")
             elif is_upsell:
-                user_states[sender_id] = "WAITING_ADMIN_UPSELL"
+                set_user_state(sender_id, "WAITING_ADMIN_UPSELL")
             elif is_practicum:
-                user_states[sender_id] = "WAITING_ADMIN_PRACTICUM"
+                set_user_state(sender_id, "WAITING_ADMIN_PRACTICUM")
             else:
-                user_states[sender_id] = "WAITING_ADMIN_GUILD"
+                set_user_state(sender_id, "WAITING_ADMIN_GUILD")
 
         else:
             print(f"[DEBUG] Это НЕ картинка. Это: {text}")
@@ -576,7 +618,7 @@ def process_user_message(sender_id, text, message_type="text", media_id=None):
                                 caption="🎁 Ваш подарок", filename="Подарок для резидента Гильдии.pdf")
 
 
-        user_states[sender_id] = "START"
+        set_user_state(sender_id, "START")
 
         print("🧠 LOGIC END")
         print("⏱ LOGIC TIME:", time.time() - start_logic)
