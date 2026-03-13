@@ -24,7 +24,7 @@ def get_google_sheet():
 
 
 def update_client_progress(phone_number, branch, step_description):
-    """Ищет клиента по номеру. Если есть - обновляет шаг. Если нет - создает новую строку."""
+    """Просто добавляет новую строку (лог) для каждого шага клиента."""
     sheet = get_google_sheet()
     if not sheet: return
 
@@ -35,21 +35,9 @@ def update_client_progress(phone_number, branch, step_description):
     phone_str = f"+{phone_number}".replace("++", "+")
 
     try:
-        # Безопасный поиск: findall не вызывает ошибку, если ничего не найдено, а возвращает []
-        cells = sheet.findall(phone_str, in_column=2)
-
-        if cells:
-            # Если нашли (список не пустой) — берем первую найденную ячейку и обновляем её строку
-            cell = cells[0]
-            sheet.update_cell(cell.row, 1, formatted_time)  # Дата и Время
-            sheet.update_cell(cell.row, 3, branch)  # Ветка
-            sheet.update_cell(cell.row, 4, step_description)  # Шаг
-            print(f"🔄 CRM Обновлен: {phone_str} -> {step_description}")
-
-        else:
-            # Если не нашли (список пустой) — добавляем новую строку
-            sheet.append_row([formatted_time, phone_str, branch, step_description])
-            print(f"✅ CRM Новый клиент: {phone_str} -> {step_description}")
+        # Убрали поиск (findall). Теперь просто всегда добавляем новую строку!
+        sheet.append_row([formatted_time, phone_str, branch, step_description])
+        print(f"📝 Лог записан: {phone_str} | {branch} | {step_description}")
 
     except Exception as e:
         print(f"❌ Ошибка записи в таблицу: {e}")
